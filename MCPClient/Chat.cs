@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using System.Net.Http;
 using System.Text;
@@ -53,9 +54,7 @@ public class Chat
                 ["content"] = userInput
             });
 
-            var reply = await ProcessQuery(tools);
-
-            Console.WriteLine($"\nAssistant: {reply}\n");
+            await ProcessQuery(tools);
         }
     }
 
@@ -70,7 +69,7 @@ public class Chat
                 model = _model,
                 messages = _conversation,
                 tools = tools,
-                stream = false
+                stream = true
             };
 
             var json = JsonSerializer.Serialize(requestBody);
@@ -79,51 +78,87 @@ public class Chat
                 new StringContent(json, Encoding.UTF8, "application/json")
             );
 
-            var responseJson = await response.Content.ReadAsStringAsync();
-            using var doc = JsonDocument.Parse(responseJson);
-            var message = doc.RootElement.GetProperty("message");
+            using var stream = await response.Content.ReadAsStreamAsync();
+            using var reader = new StreamReader(stream);
 
-            if (message.TryGetProperty("tool_calls", out var toolCalls)
-                && toolCalls.GetArrayLength() > 0)
+            var fullContent = new StringBuilder();
+            var toolCalls = new List<JsonElement>();
+            var rawMessage = "";
+
+            Console.Write("\nAssistant: ");
+
+            while (!reader.EndOfStream)
             {
-                if (toolCounter + toolCalls.GetArrayLength() > _maxToolCalls) {
-                    return $"Couldn't retrieve answer, too many tool calls. (Max tool calls: {_maxToolCalls}";
+                var line = await reader.ReadLineAsync();
+                if (string.IsNullOrWhiteSpace(line)) continue;
+
+                using var doc = JsonDocument.Parse(line);
+                var root = doc.RootElement;
+                var message = root.GetProperty("message");
+                var isDone = root.TryGetProperty("done", out var done) && done.GetBoolean();
+
+                if (message.TryGetProperty("tool_calls", out var chunkToolCalls)
+                    && chunkToolCalls.GetArrayLength() > 0)
+                {
+                    rawMessage = message.GetRawText();
+                    foreach (var tc in chunkToolCalls.EnumerateArray())
+                        toolCalls.Add(tc.Clone());
                 }
+
+                if (message.TryGetProperty("content", out var contentChunk)
+                    && contentChunk.GetString() is { Length: > 0 } fragment)
+                {
+                    Console.Write(fragment);
+                    Console.Out.Flush();
+                    await Task.Delay(25); // Artificial delay to create GPT-like effect
+                    fullContent.Append(fragment);
+                }
+
+                if (isDone) break;
+            }
+
+            Console.WriteLine();
+
+            if (toolCalls.Count > 0)
+            {
+                if (toolCounter + toolCalls.Count > _maxToolCalls)
+                    return $"Too many tool calls (max: {_maxToolCalls})";
+
                 _conversation.Add(
-                    JsonSerializer.Deserialize<Dictionary<string, object>>(message.GetRawText())!
+                    JsonSerializer.Deserialize<Dictionary<string, object>>(rawMessage)!
                 );
 
-                foreach (var toolCall in toolCalls.EnumerateArray())
+                foreach (var toolCall in toolCalls)
                 {
                     var fnName = toolCall.GetProperty("function").GetProperty("name").GetString()!;
                     var fnArgs = toolCall.GetProperty("function").GetProperty("arguments");
 
-                    Console.WriteLine($"  [Calling tool: {fnName} with arguments: {fnArgs.GetRawText()}]");
+                    Console.WriteLine($"  [Calling tool: {fnName}]");
 
                     var mcpArgs = JsonSerializer.Deserialize<Dictionary<string, object?>>(fnArgs)!;
-
                     var toolResult = await _mcpClient.CallToolAsync(fnName, mcpArgs);
-                    var resultText = toolResult.Content.First().ToString();
+                    var resultText = toolResult.Content.First().ToString()!;
 
                     _conversation.Add(new Dictionary<string, object>
                     {
                         ["role"] = "tool",
                         ["content"] = resultText
                     });
+
+                    toolCounter++;
                 }
 
                 continue;
             }
 
-            var content = message.GetProperty("content").GetString()!;
-
+            var finalContent = fullContent.ToString();
             _conversation.Add(new Dictionary<string, object>
             {
                 ["role"] = "assistant",
-                ["content"] = content
+                ["content"] = finalContent
             });
 
-            return content;
+            return finalContent;
         }
     }
 
