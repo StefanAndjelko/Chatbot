@@ -15,11 +15,11 @@
     <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.8.0" />
     <PackageReference Include="xunit" Version="2.5.3" />
     <PackageReference Include="xunit.runner.visualstudio" Version="2.5.3" />
-	<PackageReference Include="Anthropic.SDK" Version="5.10.0" />
-	<PackageReference Include="Microsoft.Extensions.Configuration" Version="10.0.7" />
-	<PackageReference Include="Microsoft.Extensions.Configuration.FileExtensions" Version="10.0.7" />
-	<PackageReference Include="Microsoft.Extensions.Configuration.Json" Version="10.0.7" />
-	<PackageReference Include="Microsoft.Extensions.Configuration.UserSecrets" Version="10.0.7" />
+	<PackageReference Include="Anthropic.SDK" Version="4.7.2" />
+	<PackageReference Include="Microsoft.Extensions.Configuration" Version="9.0.0" />
+	<PackageReference Include="Microsoft.Extensions.Configuration.FileExtensions" Version="9.0.0" />
+	<PackageReference Include="Microsoft.Extensions.Configuration.Json" Version="9.0.0" />
+	<PackageReference Include="Microsoft.Extensions.Configuration.UserSecrets" Version="9.0.0" />
 	<PackageReference Include="Microsoft.SemanticKernel" Version="1.74.0" />
 	<PackageReference Include="Microsoft.SemanticKernel.Connectors.Ollama" Version="1.74.0-alpha" />
 	<PackageReference Include="Microsoft.SemanticKernel.Connectors.OpenAI" Version="1.74.0" />
