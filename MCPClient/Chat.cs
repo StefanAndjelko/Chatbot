@@ -8,6 +8,7 @@ using Microsoft.SemanticKernel;
 using Microsoft.SemanticKernel.ChatCompletion;
 using Microsoft.SemanticKernel.Connectors.OpenAI;
 using ModelContextProtocol.Client;
+using OpenAI.Responses;
 
 public class Chat
 {
@@ -23,15 +24,32 @@ public class Chat
         _clients = clients;
     }
 
-    public async Task RunAsync()
+    public async Task<string> SendMessageAsync(string input)
     {
-        await RegisterMcpToolsAsync();
-        Console.WriteLine("Type 'quit' to exit.\n");
+        _history.AddUserMessage(input);
 
         var settings = new PromptExecutionSettings
         {
             FunctionChoiceBehavior = FunctionChoiceBehavior.Auto()
         };
+
+        var fullContent = new StringBuilder();
+
+        await foreach (var chunk in _chatCompletion.GetStreamingChatMessageContentsAsync(
+            _history, settings, _kernel))
+        {
+            fullContent.Append(chunk.Content ?? string.Empty);
+        }
+
+        var response = fullContent.ToString();
+        _history.AddAssistantMessage(response);
+        return response;
+    }
+
+    public async Task RunAsync()
+    {
+        await RegisterMcpToolsAsync();
+        Console.WriteLine("Type 'quit' to exit.\n");
 
         while (true)
         {
@@ -40,28 +58,15 @@ public class Chat
             if (string.IsNullOrWhiteSpace(input) || input.ToLower() == "quit")
                 break;
 
-            _history.AddUserMessage(input);
-
             Console.Write("\nAssistant: ");
-
-            var fullContent = new StringBuilder();
-
-            await foreach (var chunk in _chatCompletion.GetStreamingChatMessageContentsAsync(
-                _history, settings, _kernel))
-            {
-                var text = chunk.Content ?? string.Empty;
-                Console.Write(text);
-                fullContent.Append(text);
-            }
-
-            Console.WriteLine("\n");
-
-            _history.AddAssistantMessage(fullContent.ToString());
+            var response = await SendMessageAsync(input);
+            Console.WriteLine(response + "\n");
         }
     }
 
     private async Task RegisterMcpToolsAsync()
     {
+        int toolCount = 0;
         foreach (var client in _clients)
         {
             var mcpTools = await client.ListToolsAsync();
@@ -102,9 +107,11 @@ public class Chat
             _kernel.Plugins.Add(
                 KernelPluginFactory.CreateFromFunctions($"McpPlugin_{mcpTools.Count}", functions)
             );
-
-            Console.WriteLine($"Registered {mcpTools.Count} tools from MCP server.");
+            toolCount += mcpTools.Count;
+            
         }
+
+        Console.WriteLine($"Registered {toolCount} tools from MCP servers.");
     }
 
     private static List<KernelParameterMetadata> ExtractParameters(JsonElement schema)
