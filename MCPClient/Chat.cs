@@ -10,18 +10,19 @@ using ModelContextProtocol.Client;
 
 public class Chat
 {
-    private readonly McpClient _mcpClient;
+    private readonly List<McpClient> _clients;
     private readonly string _model;
     private readonly string _baseUrl;
     private static readonly HttpClient _http = new();
 
     private readonly List<Dictionary<string, object>> _conversation = new();
+    private readonly Dictionary<string, McpClient> _toolOwners = new();
 
     private int _maxToolCalls = 0;
 
-    public Chat(McpClient mcpClient, string model, string baseUrl, int maxToolCalls)
+    public Chat(List<McpClient> clients, string model, string baseUrl, int maxToolCalls)
     {
-        _mcpClient = mcpClient;
+        _clients = clients;
         _model = model;
         _baseUrl = baseUrl;
         _maxToolCalls = maxToolCalls;
@@ -29,14 +30,28 @@ public class Chat
 
     public async Task RunAsync()
     {
-        var mcpTools = await _mcpClient.ListToolsAsync();
-        var tools = mcpTools.Select(tool => (object)new
-        {
-            type = "function",
-            function = new { name = tool.Name, description = tool.Description, parameters = tool.JsonSchema}
-        }).ToList();
+        List<object> tools = new List<object>();
 
-        Console.WriteLine($"Loaded {mcpTools.Count} tools from MCP server.");
+        foreach (McpClient mcpClient in _clients)
+        {
+            var mcpTools = await mcpClient.ListToolsAsync();
+            foreach (var tool in mcpTools)
+            {
+                _toolOwners.Add(tool.Name, mcpClient);
+                tools.Add(new
+                {
+                    type = "function",
+                    function = new
+                    {
+                        name = tool.Name,
+                        description = tool.Description,
+                        parameters = tool.JsonSchema
+                    }
+                });
+            }
+        }
+
+        Console.WriteLine($"Loaded {tools.Count} tools from MCP servers.");
         Console.WriteLine($"Using model: {_model}");
         Console.WriteLine("Type 'quit' to exit.\n");
 
@@ -133,10 +148,11 @@ public class Chat
                     var fnName = toolCall.GetProperty("function").GetProperty("name").GetString()!;
                     var fnArgs = toolCall.GetProperty("function").GetProperty("arguments");
 
-                    Console.WriteLine($"  [Calling tool: {fnName}]");
+                    Console.WriteLine($"  [Calling tool: {fnName}, with arguments: {fnArgs}]");
 
                     var mcpArgs = JsonSerializer.Deserialize<Dictionary<string, object?>>(fnArgs)!;
-                    var toolResult = await _mcpClient.CallToolAsync(fnName, mcpArgs);
+                    var owningClient = _toolOwners[fnName];
+                    var toolResult = await owningClient.CallToolAsync(fnName, mcpArgs);
                     var resultText = toolResult.Content.First().ToString()!;
 
                     _conversation.Add(new Dictionary<string, object>

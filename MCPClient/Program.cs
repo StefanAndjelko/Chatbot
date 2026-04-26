@@ -12,7 +12,7 @@ var serverProjectPath = config["McpServer:ProjectPath"];
 var ollamaBaseUrl = config["Ollama:BaseUrl"]!;
 var ollamaModel = config["Ollama:Model"]!;
 
-await using var mcpClient = await McpClient.CreateAsync(
+await using var localClient = await McpClient.CreateAsync(
     new StdioClientTransport(new StdioClientTransportOptions
     {
         Name = "McpServer",
@@ -22,5 +22,14 @@ await using var mcpClient = await McpClient.CreateAsync(
     })
 );
 
-var chatBot = new Chat(mcpClient, ollamaModel, ollamaBaseUrl, 5);
+await using var everythingClient = await McpClient.CreateAsync(
+    new StdioClientTransport(new StdioClientTransportOptions
+    {
+        Name = "McpServerEverything",
+        Command = config["McpServerEverything:Command"]!,
+        Arguments = config["McpServerEverything:Arguments"]!.Split(' '),
+    })
+);
+
+var chatBot = new Chat([localClient, everythingClient], ollamaModel, ollamaBaseUrl, 5);
 await chatBot.RunAsync();
