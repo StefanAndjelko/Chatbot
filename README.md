@@ -25,7 +25,7 @@ Potrebno je nastaviti dva konfiguracijska fajla
 
 ### 1. `appsettings.json`
 
-Fajl je v `MCPClient` project direktoriju in je naslednje oblike:
+Datoteka je v `MCPClient` project direktoriju in je naslednje oblike:
 
 ```json
 {
@@ -62,7 +62,7 @@ Odvisno od operativnega sistema je potrebno nastaviti ustrezen path.
 
 #### `Llm:Provider` in `Llm:Model`
 
-Nastavi na `ollama`, `claude`, or `openai` in izberi ustrezen model:
+Nastavi na `ollama`, `claude`, ali `openai` in izberi ustrezen model:
 
 #### `McpServerEverything:Command`
 
@@ -88,7 +88,7 @@ Iz root direktorija pozenite ukaz:
 dotnet test
 ```
 
-Poleg testa za celoten pipeline je se test ki preverja Claude pipeline z "mock" kljucem tako da preveri ce api vrne "Unauthoritzed" napako.
+Poleg testa za celoten pipeline je tudi test ki preverja Claude pipeline z "mock" kljucem tako da preveri ce api vrne "Unauthoritzed" napako.
 
 ## Uporabljeni paketi
 
@@ -100,4 +100,7 @@ Uporablja se da poenoti implementacijo za razlicne LLM providerje. Avtomatsko ha
 
 ### 3. Anthropic.SDK
 Ker SemanticKernel ne podpira Anthropic po defaultu, se uporablja Anthropic.SDK ce je izbrani provider "claude".
+
+### NPX
+Npx je potreben za javni MCP streznik: @modelcontextprotocol/server-everything
 
